@@ -10,9 +10,7 @@ api.interceptors.request.use(
     (config) => {
         const token = localStorage.getItem('authToken');
         if (token) {
-            config.headers['Authorization'] = `Token ${token}`; // Ou la manière dont votre API attend le jeton
-            // Vous devrez peut-être également gérer le jeton CSRF différemment s'il est requis pour d'autres requêtes 
-            // config.headers['X-CSRFTOKEN'] = 'VOTRE_JETON_CSRF'; // Réfléchir à la manière de l'obtenir
+            config.headers['Authorization'] = `Token ${token}`;
         }
         return config;
     },
