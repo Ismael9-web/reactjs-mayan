@@ -1,0 +1,3 @@
+VHOST: mayan
+QUEUE: celery@mayan-edms-worker_a.7c384b782606.celery.pidbox
+INDEX: v2
