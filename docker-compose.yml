@@ -1,0 +1,28 @@
+# Docker Compose configuration for React + Node.js application
+version: '3.8'
+
+services:
+  # Main application service
+  app:
+    # Build the image using the Dockerfile in the current directory
+    build:
+      context: .
+      dockerfile: Dockerfile
+    
+    # Map host ports to container ports
+    # - 3000 for React frontend
+    # - 5000 for Node.js backend
+    ports:
+      - "3000:3000"
+      - "5000:5000"
+    
+    # Set production environment
+    environment:
+      - NODE_ENV=production
+    
+    # Persist logs by mounting a volume
+    volumes:
+      - ./logs:/app/logs
+    
+    # Automatically restart unless stopped manually
+    restart: unless-stopped
