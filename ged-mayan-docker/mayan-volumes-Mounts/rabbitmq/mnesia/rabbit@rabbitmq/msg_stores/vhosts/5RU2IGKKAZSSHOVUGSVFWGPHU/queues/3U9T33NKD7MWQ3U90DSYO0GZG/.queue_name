@@ -1,0 +1,3 @@
+VHOST: mayan
+QUEUE: documents_slow
+INDEX: v2

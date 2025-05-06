@@ -1,0 +1,1 @@
+/usr/local/bin/postgres "-c" "default_statistics_target=200" "-c" "maintenance_work_mem=128MB" "-c" "max_connections=150" "-c" "shared_buffers=512MB" "-c" "work_mem=32MB"
