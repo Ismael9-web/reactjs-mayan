@@ -12,25 +12,37 @@ const WorkflowDocuments = () => {
     const [searchQuery, setSearchQuery] = useState('');
     const [showExpired, setShowExpired] = useState(false);
     const [selectedDocument, setSelectedDocument] = useState(null);
+    const [filterCriteria, setFilterCriteria] = useState({
+        startDate: '',
+        endDate: '',
+        status: '',
+    });
     const itemsPerPage = 5;
 
-    useEffect(() => {
-        const fetchDocuments = async () => {
-            setLoading(true);
-            setError(null);
-            try {
-                const response = await api.get('workflow_templates/1/states/3/documents');
-                setDocuments(response.data.results || []);
-            } catch (err) {
-                console.error('Error fetching documents:', err);
-                setError('Erreur : Impossible de récupérer les documents.');
-            } finally {
-                setLoading(false);
-            }
-        };
+    const fetchDocuments = async () => {
+        setLoading(true);
+        setError(null);
+        try {
+            const response = await api.get('/api/documents', {
+                params: {
+                    keyword: searchQuery,
+                    startDate: filterCriteria.startDate,
+                    endDate: filterCriteria.endDate,
+                    status: filterCriteria.status,
+                },
+            });
+            setDocuments(response.data || []);
+        } catch (err) {
+            console.error('Error fetching documents:', err);
+            setError('Failed to fetch documents.');
+        } finally {
+            setLoading(false);
+        }
+    };
 
+    useEffect(() => {
         fetchDocuments();
-    }, []);
+    }, [searchQuery, filterCriteria]);
 
     const fetchMetadata = async (docId) => {
         try {

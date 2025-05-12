@@ -13,17 +13,13 @@ const LoginPage = () => {
 
     const handleSubmit = async (event) => {
         event.preventDefault();
-        setError(''); // Clear previous errors
+        setError('');
 
         try {
-            const response = await api.post('/auth/token/obtain/', { username, password });
+            const response = await api.post('/api/login', { username, password }); // Ensure the backend handles this route
 
             if (response.data.token) {
-                // Store the token and sessionId in cookies
-                Cookies.set('authToken', response.data.token, { expires: 10000 });
-                Cookies.set('sessionId', response.headers['set-cookie'], { expires: 10000 });
-
-                // Redirect to the dashboard
+                Cookies.set('authToken', response.data.token, { expires: 1 });
                 navigate('/dashboard');
             } else {
                 setError('Login failed. Please check your credentials.');
