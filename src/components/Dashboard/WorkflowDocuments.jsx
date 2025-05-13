@@ -23,14 +23,7 @@ const WorkflowDocuments = () => {
         setLoading(true);
         setError(null);
         try {
-            const response = await api.get('/api/documents', {
-                params: {
-                    keyword: searchQuery,
-                    startDate: filterCriteria.startDate,
-                    endDate: filterCriteria.endDate,
-                    status: filterCriteria.status,
-                },
-            });
+            const response = await api.get('/documents'); // Removed filters for now
             setDocuments(response.data || []);
         } catch (err) {
             console.error('Error fetching documents:', err);

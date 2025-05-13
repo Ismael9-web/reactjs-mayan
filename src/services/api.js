@@ -2,11 +2,12 @@ import axios from 'axios';
 import Cookies from 'js-cookie';
 
 const api = axios.create({
-    baseURL: 'http://localhost:5000/', // Updated to point to the backend server
+    baseURL: 'http://localhost:5000/api',
     headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
     },
+    withCredentials: true, // Ensure cookies are sent with requests
 });
 
 api.interceptors.request.use((config) => {

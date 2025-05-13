@@ -24,10 +24,36 @@ async function getAuthToken() {
                 'Content-Type': 'application/json',
             },
         });
+        console.log('Auth token fetched successfully:', response.data.token); // Debugging log
         return response.data.token;
     } catch (error) {
-        console.error('Error fetching auth token:', error);
+        console.error('Error fetching auth token:', error.response ? error.response.data : error.message);
+        if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data:', error.response.data);
+        }
         throw new Error('Failed to fetch auth token');
+    }
+}
+
+// Helper function to verify workflow template and state
+async function verifyWorkflowTemplateAndState(token, templateId, stateId) {
+    try {
+        const response = await axios.get(`http://localhost/api/v4/workflow_templates/${templateId}/`, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        });
+
+        const states = response.data.states;
+        const stateExists = states.some((state) => state.id === stateId);
+
+        if (!stateExists) {
+            throw new Error(`State ID ${stateId} does not exist in Workflow Template ID ${templateId}`);
+        }
+    } catch (error) {
+        console.error('Error verifying workflow template and state:', error.response ? error.response.data : error.message);
+        throw new Error('Invalid Workflow Template or State');
     }
 }
 
@@ -64,34 +90,49 @@ app.post('/api/login', async (req, res) => {
 // Route to fetch documents with optional filters
 app.get('/api/documents', async (req, res) => {
     try {
+        console.log('Fetching documents from Mayan API...');
+        console.log('Cookies received:', req.cookies); // Debugging log to check cookies
+
         const token = await getAuthToken();
-        const response = await axios.get('http://localhost/api/v4/workflow_templates/1/states/3/documents/', {
+        if (!token) {
+            console.error('Error: Auth token is null or undefined');
+            return res.status(500).json({ error: 'Failed to fetch auth token' });
+        }
+
+        const csrfToken = req.cookies.csrftoken; // Retrieve CSRF token from cookies
+        const sessionId = req.cookies.sessionid; // Retrieve session ID from cookies
+
+        if (!csrfToken || !sessionId) {
+            console.error('Error: Missing CSRF token or session ID');
+            return res.status(400).json({ error: 'Missing CSRF token or session ID' });
+        }
+
+        const apiUrl = 'http://localhost/api/v4/workflow_templates/1/states/3/documents/';
+        console.log('API URL:', apiUrl);
+
+        const response = await axios.get(apiUrl, {
             headers: {
                 Authorization: `Bearer ${token}`,
+                'X-CSRFTOKEN': csrfToken,
+                Cookie: `sessionid=${sessionId}`,
+                Accept: 'application/json',
             },
         });
 
-        let documents = response.data.results;
-
-        // Apply filters if provided
-        const { keyword, startDate, endDate, status } = req.query;
-        if (keyword) {
-            documents = documents.filter(doc => doc.metadata.some(meta => meta.value.includes(keyword)));
-        }
-        if (startDate) {
-            documents = documents.filter(doc => new Date(doc.date_created) >= new Date(startDate));
-        }
-        if (endDate) {
-            documents = documents.filter(doc => new Date(doc.date_created) <= new Date(endDate));
-        }
-        if (status) {
-            documents = documents.filter(doc => doc.status === status);
+        if (!response.data || !response.data.results) {
+            console.error('Error: Invalid response from Mayan API');
+            return res.status(500).json({ error: 'Invalid response from Mayan API' });
         }
 
-        res.json(documents);
+        console.log('Documents fetched successfully:', response.data.results);
+        res.json(response.data.results);
     } catch (error) {
-        console.error('Error fetching documents:', error);
-        res.status(500).json({ error: 'Failed to fetch documents' });
+        console.error('Error fetching documents:', error.response ? error.response.data : error.message);
+        if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data:', error.response.data);
+        }
+        res.status(500).json({ error: error.message || 'Failed to fetch documents' });
     }
 });
 

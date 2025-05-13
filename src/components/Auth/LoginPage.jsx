@@ -16,7 +16,7 @@ const LoginPage = () => {
         setError('');
 
         try {
-            const response = await api.post('/api/login', { username, password }); // Ensure the backend handles this route
+            const response = await api.post('/login', { username, password }); // Ensure the backend handles this route
 
             if (response.data.token) {
                 Cookies.set('authToken', response.data.token, { expires: 1 });
