@@ -1,15 +1,23 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import WorkflowDocuments from './WorkflowDocuments';
 import logo from '../../assets/logo.png';
 import jsPDF from 'jspdf';
+import Cookies from 'js-cookie';
 import './DashboardPage.css';
 
 const DashboardPage = () => {
     const { logout } = useAuth();
     const navigate = useNavigate();
     const [searchQuery, setSearchQuery] = useState('');
+
+    useEffect(() => {
+        const authToken = Cookies.get('authToken');
+        if (!authToken) {
+            navigate('/login');
+        }
+    }, [navigate]);
 
     const handleLogout = () => {
         logout();

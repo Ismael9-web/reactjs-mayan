@@ -13,6 +13,20 @@ app.use(cors({ origin: 'http://localhost:3000', credentials: true }));
 app.use(bodyParser.json());
 app.use(cookieParser());
 
+app.use((req, res, next) => {
+    const csrfToken = req.cookies.csrftoken;
+    const sessionId = req.cookies.sessionid;
+    const authToken = req.cookies.authToken;
+
+    if (csrfToken && sessionId && authToken) {
+        req.headers['X-CSRFTOKEN'] = csrfToken;
+        req.headers['Cookie'] = `sessionid=${sessionId}`;
+        req.headers['Authorization'] = `Bearer ${authToken}`;
+    }
+
+    next();
+});
+
 // Helper function to fetch token
 async function getAuthToken() {
     try {
@@ -134,6 +148,88 @@ app.get('/api/documents', async (req, res) => {
         }
         res.status(500).json({ error: error.message || 'Failed to fetch documents' });
     }
+});
+
+app.get('/api/documents_with_metadata', async (req, res) => {
+    try {
+        console.log('Fetching documents and metadata from Mayan API...');
+        const token = await getAuthToken();
+        if (!token) {
+            console.error('Error: Auth token is null or undefined');
+            return res.status(500).json({ error: 'Failed to fetch auth token' });
+        }
+
+        const csrfToken = req.cookies.csrftoken; // Retrieve CSRF token from cookies
+        const sessionId = req.cookies.sessionid; // Retrieve session ID from cookies
+
+        if (!csrfToken || !sessionId) {
+            console.error('Error: Missing CSRF token or session ID');
+            return res.status(400).json({ error: 'Missing CSRF token or session ID' });
+        }
+
+        const apiUrl = 'http://localhost/api/v4/workflow_templates/1/states/3/documents/';
+        console.log('API URL:', apiUrl);
+
+        const documentsResponse = await axios.get(apiUrl, {
+            headers: {
+                Authorization: `Bearer ${token}`,
+                'X-CSRFTOKEN': csrfToken,
+                Cookie: `sessionid=${sessionId}`,
+                Accept: 'application/json',
+            },
+        });
+
+        if (!documentsResponse.data || !documentsResponse.data.results) {
+            console.error('Error: Invalid response from Mayan API');
+            return res.status(500).json({ error: 'Invalid response from Mayan API' });
+        }
+
+        const documents = documentsResponse.data.results;
+
+        // Fetch metadata for each document
+        const documentsWithMetadata = await Promise.all(
+            documents.map(async (doc) => {
+                try {
+                    const metadataResponse = await axios.get(`http://localhost/api/v4/documents/${doc.id}/metadata/`, {
+                        headers: {
+                            Authorization: `Bearer ${token}`,
+                            'X-CSRFTOKEN': csrfToken,
+                            Cookie: `sessionid=${sessionId}`,
+                            Accept: 'application/json',
+                        },
+                    });
+
+                    return {
+                        ...doc,
+                        metadata: metadataResponse.data.results || [],
+                    };
+                } catch (error) {
+                    console.error(`Error fetching metadata for document ID ${doc.id}:`, error.response ? error.response.data : error.message);
+                    return {
+                        ...doc,
+                        metadata: [],
+                    };
+                }
+            })
+        );
+
+        console.log('Documents with metadata fetched successfully:', documentsWithMetadata);
+        res.json(documentsWithMetadata);
+    } catch (error) {
+        console.error('Error fetching documents and metadata:', error.response ? error.response.data : error.message);
+        if (error.response) {
+            console.error('Response status:', error.response.status);
+            console.error('Response data:', error.response.data);
+        }
+        res.status(500).json({ error: error.message || 'Failed to fetch documents and metadata' });
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    res.clearCookie('csrftoken');
+    res.clearCookie('sessionid');
+    res.clearCookie('authToken');
+    res.status(200).json({ message: 'Logged out successfully' });
 });
 
 // Start the server
