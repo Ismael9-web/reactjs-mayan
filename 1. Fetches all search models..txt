@@ -1,0 +1,36 @@
+1. Fetches all search models.
+
+2. Extracts the pk values.
+
+3. For each pk, fetches detailed data.
+
+4. Writes it to a CSV file named search_models.csv.
+
+
+#!/bin/bash
+
+# === CONFIGURATION ===
+BASE_URL="http://localhost"
+CSRF_TOKEN="53U9bUxgCGiFjpspNSRGqDK2hzRCGU6kMq8xDlUDdLa59ddtQNFImq8i85gP2dPQ"
+HEADERS=(
+  -H "accept: application/json"
+  -H "X-CSRFTOKEN: $CSRF_TOKEN"
+)
+
+OUTPUT_FILE="search_models.csv"
+
+# === INIT CSV FILE ===
+echo "pk,label,dotted_path,app_label,model_name,description" > "$OUTPUT_FILE"
+
+# === FETCH SEARCH MODELS LIST ===
+RESPONSE=$(curl -s -X GET "$BASE_URL/api/v4/search_models/" "${HEADERS[@]}")
+
+# === LOOP OVER EACH PK AND FETCH DETAILS ===
+for pk in $(echo "$RESPONSE" | jq -r '.results[].pk'); do
+  DETAIL=$(curl -s -X GET "$BASE_URL/api/v4/search_models/$pk/" "${HEADERS[@]}")
+  
+  # Extract fields and append to CSV
+  echo "$DETAIL" | jq -r '[.pk, .label, .dotted_path, .app_label, .model_name, (.description // "")] | @csv' >> "$OUTPUT_FILE"
+done
+
+echo "Search models data saved to: $OUTPUT_FILE"

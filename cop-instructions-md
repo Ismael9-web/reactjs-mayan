@@ -1,0 +1,129 @@
+# GitHub Copilot Instructions
+
+## Project Context
+
+You are working on a ReactJS frontend integrated with a Mayan EDMS API backend. The project uses a Node.js/Express.js server to proxy API requests securely and includes TailwindCSS for styling.
+
+
+
+## Directory Structure
+
+```
+reactjs-mayan/
+├── backend/                # Node.js server
+│   ├── server.js           # Express API Proxy
+│   └── .env                # MAYAN credentials
+├── frontend/               # React app
+│   ├── src/
+│   │   ├── components/
+│   │   ├── pages/
+│   │   └── services/api.js # Axios instance setup
+│   ├── public/
+│   └── tailwind.config.js
+├── docker-compose.yml
+├── README.md
+└── copilot-instructions.md
+```
+
+
+
+## Copilot Usage Scope
+
+### Frontend
+
+* Suggest TailwindCSS classes for login and dashboard pages.
+* Help fetch and render Mayan EDMS document metadata.
+* Implement search, pagination, filtering.
+* Export table data to PDF using `jspdf`.
+
+### Backend
+
+* Authenticate with Mayan EDMS API.
+* Retrieve workflow templates, states, and documents.
+* Filter documents by metadata fields.
+
+
+
+## Code Behavior Notes
+
+* Use `Cookies` to store `authToken` and `sessionid` and `X-CSRFTOKEN`.
+* All `axios` calls must pass the Bearer token in headers, sessionid and X-CSRFTOKEN.
+* `/api/login` should call Mayan `/auth/token/obtain/` and return token.
+* Frontend uses `axios.create()` to communicate only with the local Node.js backend (`http://localhost:5000/api`).
+
+
+
+## Style & Components
+
+* Use functional components + hooks (e.g., `useState`, `useEffect`).
+* Tailwind for layout: flex, grid, spacing, typography.
+* Split pages into `LoginPage`, `DashboardPage`, `WorkflowDocuments`.
+
+
+
+## Required Packages
+
+### Frontend
+
+```bash
+yarn add axios js-cookie react-router-dom jspdf tailwindcss
+```
+
+### Backend
+
+```bash
+yarn add express dotenv cors axios cookie-parser
+```
+
+
+
+# Product Requirement Document (PRD)
+
+## Title
+
+"Mayan EDMS Dashboard Integration"
+
+
+
+## Objective
+
+Build a secure and styled dashboard app using ReactJS and TailwindCSS to visualize and manage metadata documents retrieved from a Mayan EDMS backend via a Node.js proxy API.
+
+
+
+## Functional Requirements
+
+### Authentication
+
+* Login page using Mayan EDMS `/auth/token/obtain/`.
+* Store auth token and session via `js-cookie`.
+* Logout functionality.
+
+### Dashboard
+
+* Fetch documents from a specific workflow state.
+* Display document metadata in a styled table.
+* Pagination, search, filters.
+* Export to PDF.
+
+### Backend Proxy
+
+* Calls Mayan API endpoints securely.
+* Middleware to append `Authorization: Bearer token`.
+* Apply filtering logic (dates, keywords).
+
+
+
+## Non-Functional Requirements
+
+* Must use TailwindCSS.
+* Must use Axios for all HTTP calls.
+* Securely proxy requests via backend.
+* Handle CORS issues between frontend and Mayan backend.
+
+
+## Target Users
+
+Internal document officers and admins at the Ministry of Budget (Direction des Systèmes d'Information).
+
+

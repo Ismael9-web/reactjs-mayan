@@ -104,7 +104,7 @@ app.post('/api/login', async (req, res) => {
 // Route to fetch documents with optional filters
 app.get('/api/documents', async (req, res) => {
     try {
-        console.log('Fetching documents from Mayan API...');
+        console.log('Fetching documents from Mayan API..');
         console.log('Cookies received:', req.cookies); // Debugging log to check cookies
 
         const token = await getAuthToken();
@@ -158,7 +158,7 @@ app.get('/api/documents_with_metadata', async (req, res) => {
             console.error('Error: Auth token is null or undefined');
             return res.status(500).json({ error: 'Failed to fetch auth token' });
         }
-
+        console.log('Auth token:', token); // Debugging log
         const csrfToken = req.cookies.csrftoken; // Retrieve CSRF token from cookies
         const sessionId = req.cookies.sessionid; // Retrieve session ID from cookies
 
