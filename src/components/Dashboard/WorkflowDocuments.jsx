@@ -1,17 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
 
-const EXPIRY_METADATA_KEY = 'expiry_date'; // Change this if your expiry field is named differently
-
 const WorkflowDocuments = () => {
+
     const [documents, setDocuments] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
     const [currentPage, setCurrentPage] = useState(1);
-    const [filters, setFilters] = useState({});
-    const [sortConfig, setSortConfig] = useState({ key: null, direction: 'asc' });
+    const [filter, setFilter] = useState('');
     const documentsPerPage = 5;
 
     useEffect(() => {
@@ -28,184 +27,195 @@ const WorkflowDocuments = () => {
                 setLoading(false);
             }
         };
+
         fetchDocumentsWithMetadata();
     }, []);
 
+
     // Extract unique metadata keys for table columns
-    const metadataKeys = useMemo(() =>
-        Array.from(new Set(documents.flatMap(doc => doc.metadata.map(meta => meta.metadata_type.label))))
-    , [documents]);
+    const metadataKeys = Array.from(new Set(documents.flatMap(doc => doc.metadata.map(meta => meta.metadata_type.label))));
 
-    // Filtering
-    const handleFilterChange = (key, value) => {
-        setFilters(prev => ({ ...prev, [key]: value }));
-        setCurrentPage(1);
-    };
-    const filteredDocuments = useMemo(() => {
-        return documents.filter(doc => {
-            // Filter by label and creation date
-            if (filters.label && !doc.label.toLowerCase().includes(filters.label.toLowerCase())) return false;
-            if (filters.datetime_created && !doc.datetime_created.includes(filters.datetime_created)) return false;
-            // Filter by metadata
-            for (const key of metadataKeys) {
-                if (filters[key]) {
-                    const metaValue = doc.metadata.find(meta => meta.metadata_type.label === key)?.value || '';
-                    if (!metaValue.toLowerCase().includes(filters[key].toLowerCase())) return false;
-                }
-            }
-            return true;
-        });
-    }, [documents, filters, metadataKeys]);
+    // Helper: get value by metadata label
+    const getMetaValue = (doc, label) => doc.metadata.find(meta => meta.metadata_type.label === label)?.value || '';
 
-    // Sorting
-    const sortedDocuments = useMemo(() => {
-        if (!sortConfig.key) return filteredDocuments;
-        return [...filteredDocuments].sort((a, b) => {
-            let aValue, bValue;
-            if (sortConfig.key === 'label') {
-                aValue = a.label;
-                bValue = b.label;
-            } else if (sortConfig.key === 'datetime_created') {
-                aValue = a.datetime_created;
-                bValue = b.datetime_created;
-            } else {
-                aValue = a.metadata.find(meta => meta.metadata_type.label === sortConfig.key)?.value || '';
-                bValue = b.metadata.find(meta => meta.metadata_type.label === sortConfig.key)?.value || '';
-            }
-            if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1;
-            if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1;
-            return 0;
-        });
-    }, [filteredDocuments, sortConfig]);
+    // Unified filter: search all columns and metadata
+    const filteredDocuments = documents.filter(doc => {
+        const docValues = [
+            doc.label,
+            new Date(doc.datetime_created).toLocaleString(),
+            ...metadataKeys.map(key => getMetaValue(doc, key))
+        ].join(' ').toLowerCase();
+        return docValues.includes(filter.toLowerCase());
+    });
 
-    // Pagination
     const indexOfLastDocument = currentPage * documentsPerPage;
     const indexOfFirstDocument = indexOfLastDocument - documentsPerPage;
-    const currentDocuments = sortedDocuments.slice(indexOfFirstDocument, indexOfLastDocument);
-    const totalPages = Math.ceil(sortedDocuments.length / documentsPerPage);
+    const currentDocuments = filteredDocuments.slice(indexOfFirstDocument, indexOfLastDocument);
+
     const paginate = (pageNumber) => setCurrentPage(pageNumber);
 
-    // PDF Export (exclude expired)
-    const handleExportPDF = () => {
-        const doc = new jsPDF();
-        const today = new Date();
-        const tableColumn = ['Nom', 'Date de Création', ...metadataKeys];
-        const tableRows = sortedDocuments
-            .filter(doc => {
-                const expiry = doc.metadata.find(meta => meta.metadata_type.label === EXPIRY_METADATA_KEY)?.value;
-                return !expiry || new Date(expiry) >= today;
-            })
-            .map(doc => [
-                doc.label,
-                new Date(doc.datetime_created).toLocaleString(),
-                ...metadataKeys.map(key => doc.metadata.find(meta => meta.metadata_type.label === key)?.value || '-')
-            ]);
-        doc.autoTable({ head: [tableColumn], body: tableRows });
-        doc.save('documents.pdf');
-    };
-
-    // Highlight expired
+    // Helper: check if expired (Date-fin < today)
     const isExpired = (doc) => {
-        const expiry = doc.metadata.find(meta => meta.metadata_type.label === EXPIRY_METADATA_KEY)?.value;
-        return expiry && new Date(expiry) < new Date();
+        const dateFinLabel = metadataKeys.find(key => key.toLowerCase().includes('date-fin')) || metadataKeys.find(key => key.toLowerCase().includes('fin'));
+        if (!dateFinLabel) return false;
+        const dateFinValue = getMetaValue(doc, dateFinLabel);
+        if (!dateFinValue) return false;
+        // Accept formats like DD-MM-YYYY or YYYY-MM-DD
+        const [d, m, y] = dateFinValue.split('-');
+        let dateFin;
+        if (dateFinValue.length === 10 && d && m && y) {
+            if (y.length === 4) {
+                dateFin = new Date(dateFinValue);
+            } else {
+                dateFin = new Date(`${y}-${m}-${d}`);
+            }
+        } else {
+            dateFin = new Date(dateFinValue);
+        }
+        if (isNaN(dateFin)) return false;
+        const today = new Date();
+        today.setHours(0,0,0,0);
+        return dateFin < today;
     };
 
-    // Sorting handler
-    const handleSort = (key) => {
-        setSortConfig(prev => {
-            if (prev.key === key) {
-                return { key, direction: prev.direction === 'asc' ? 'desc' : 'asc' };
-            }
-            return { key, direction: 'asc' };
+    // PDF Export
+    const handleExportPDF = () => {
+        const docPdf = new jsPDF('l', 'pt', 'a4');
+        // Title
+        docPdf.setFontSize(16);
+        docPdf.text('Direction de la Trésorerie Générale', 40, 50);
+        docPdf.setFontSize(13);
+        const todayStr = new Date().toLocaleDateString();
+        docPdf.text(`Liste de beneficiaire de la pension alimentaire et la date (${todayStr})`, 40, 75);
+
+        // Table columns (match sample PDF order)
+        const columnOrder = [
+            'Date-fin',
+            'Date-initial',
+            'Montant par Mois',
+            'Motif-Saisi',
+            'Nom-beneficaire',
+            'Nom-employé',
+            'Relation-employe-beneficiaire',
+            'fonction-employé',
+            'total-à-payer',
+        ];
+        // Map actual metadata keys to sample columns
+        const colMap = {};
+        columnOrder.forEach(col => {
+            const found = metadataKeys.find(k => k.replace(/\s|_/g, '').toLowerCase().includes(col.replace(/\s|_|é|è|ê|ë/g, '').toLowerCase().replace('é','e').replace('è','e').replace('ê','e').replace('ë','e')));
+            colMap[col] = found || col;
         });
+
+        // Table rows
+        const rows = filteredDocuments.map(doc => [
+            getMetaValue(doc, colMap['Date-fin']),
+            getMetaValue(doc, colMap['Date-initial']),
+            getMetaValue(doc, colMap['Montant par Mois']),
+            getMetaValue(doc, colMap['Motif-Saisi']),
+            getMetaValue(doc, colMap['Nom-beneficaire']),
+            getMetaValue(doc, colMap['Nom-employé']),
+            getMetaValue(doc, colMap['Relation-employe-beneficiaire']),
+            getMetaValue(doc, colMap['fonction-employé']),
+            getMetaValue(doc, colMap['total-à-payer']),
+        ]);
+
+        // Table header
+        const head = [columnOrder];
+
+        // Table styling
+        docPdf.autoTable({
+            head,
+            body: rows,
+            startY: 100,
+            headStyles: { fillColor: [22, 119, 199], textColor: 255, fontStyle: 'bold' },
+            bodyStyles: { fontSize: 10 },
+            alternateRowStyles: { fillColor: [240, 240, 240] },
+            margin: { left: 40, right: 40 },
+            styles: { cellPadding: 4, overflow: 'linebreak' },
+        });
+
+        // Totals (as in sample)
+        // Calculate total à payer and total ce mois (sum of Montant par Mois)
+        let totalPayer = 0;
+        let totalCeMois = 0;
+        rows.forEach(row => {
+            // total-à-payer
+            const total = (row[8] || '').replace(/\s|,/g, '').replace(/[^\d.]/g, '');
+            if (total) totalPayer += parseFloat(total);
+            // Montant par Mois
+            const mois = (row[2] || '').replace(/\s|,/g, '').replace(/[^\d.]/g, '');
+            if (mois) totalCeMois += parseFloat(mois);
+        });
+        docPdf.setFontSize(12);
+        docPdf.text(`Total à payé: ${totalPayer.toLocaleString('fr-FR')} DJF`, 500, docPdf.internal.pageSize.height - 60);
+        docPdf.text(`Total à payé ce mois: ${totalCeMois.toLocaleString('fr-FR')} DJF`, 470, docPdf.internal.pageSize.height - 30);
+
+        docPdf.save('liste_de_beneficiaires_de_la_pension_alimentaire.pdf');
     };
 
     if (loading) return <p>Chargement des documents...</p>;
     if (error) return <p>{error}</p>;
 
+
     return (
         <div className="p-4 bg-white shadow-md rounded-lg">
-            <div className="mb-4 flex justify-between items-center">
+            <div className="mb-4 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <h3 className="text-xl font-bold">Liste de Bénéficiaires de la Pension Alimentaire</h3>
-                <button
-                    onClick={handleExportPDF}
-                    className="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600"
-                >
-                    Exporter en PDF
-                </button>
-            </div>
-            {/* Filters */}
-            <div className="mb-2 flex flex-wrap gap-2">
-                <input
-                    type="text"
-                    placeholder="Filtrer par nom"
-                    value={filters.label || ''}
-                    onChange={e => handleFilterChange('label', e.target.value)}
-                    className="border px-2 py-1 rounded"
-                />
-                <input
-                    type="text"
-                    placeholder="Filtrer par date de création"
-                    value={filters.datetime_created || ''}
-                    onChange={e => handleFilterChange('datetime_created', e.target.value)}
-                    className="border px-2 py-1 rounded"
-                />
-                {metadataKeys.map(key => (
+                <div className="flex gap-2 items-center">
                     <input
-                        key={key}
                         type="text"
-                        placeholder={`Filtrer par ${key}`}
-                        value={filters[key] || ''}
-                        onChange={e => handleFilterChange(key, e.target.value)}
-                        className="border px-2 py-1 rounded"
+                        placeholder="Filtrer tous les champs..."
+                        value={filter}
+                        onChange={e => { setFilter(e.target.value); setCurrentPage(1); }}
+                        className="border border-gray-300 rounded px-2 py-1"
+                        style={{ minWidth: 220 }}
                     />
-                ))}
+                    <button
+                        onClick={handleExportPDF}
+                        className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                    >
+                        Exporter PDF
+                    </button>
+                </div>
             </div>
-            <table className="w-full border-collapse border border-gray-300">
-                <thead>
-                    <tr className="bg-gray-200">
-                        <th
-                            className="border border-gray-300 px-4 py-2 cursor-pointer"
-                            onClick={() => handleSort('label')}
-                        >
-                            Nom {sortConfig.key === 'label' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
-                        </th>
-                        <th
-                            className="border border-gray-300 px-4 py-2 cursor-pointer"
-                            onClick={() => handleSort('datetime_created')}
-                        >
-                            Date de Création {sortConfig.key === 'datetime_created' ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
-                        </th>
-                        {metadataKeys.map((key, index) => (
-                            <th
-                                key={index}
-                                className="border border-gray-300 px-4 py-2 cursor-pointer"
-                                onClick={() => handleSort(key)}
-                            >
-                                {key} {sortConfig.key === key ? (sortConfig.direction === 'asc' ? '▲' : '▼') : ''}
-                            </th>
-                        ))}
-                    </tr>
-                </thead>
-                <tbody>
-                    {currentDocuments.map((doc) => (
-                        <tr
-                            key={doc.id}
-                            className={`hover:bg-gray-100 ${isExpired(doc) ? 'bg-red-200' : ''}`}
-                        >
-                            <td className="border border-gray-300 px-4 py-2">{doc.label}</td>
-                            <td className="border border-gray-300 px-4 py-2">{new Date(doc.datetime_created).toLocaleString()}</td>
-                            {metadataKeys.map((key, index) => (
-                                <td key={index} className="border border-gray-300 px-4 py-2">
-                                    {doc.metadata.find(meta => meta.metadata_type.label === key)?.value || '-'}
-                                </td>
+            <div className="overflow-x-auto">
+                <table className="w-full border-collapse border border-gray-300">
+                    <thead>
+                        <tr className="bg-gray-200">
+                            {/* Render columns in sample PDF order if possible */}
+                            {['Date-fin','Date-initial','Montant par Mois','Motif-Saisi','Nom-beneficaire','Nom-employé','Relation-employe-beneficiaire','fonction-employé','total-à-payer'].map((col, idx) => (
+                                <th key={col} className="border border-gray-300 px-4 py-2 whitespace-nowrap">{col}</th>
                             ))}
                         </tr>
-                    ))}
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        {currentDocuments.map((doc) => {
+                            // Map columns to metadata
+                            const get = (label) => {
+                                const found = metadataKeys.find(k => k.replace(/\s|_/g, '').toLowerCase().includes(label.replace(/\s|_|é|è|ê|ë/g, '').toLowerCase().replace('é','e').replace('è','e').replace('ê','e').replace('ë','e')));
+                                return getMetaValue(doc, found || label) || '-';
+                            };
+                            const expired = isExpired(doc);
+                            return (
+                                <tr key={doc.id} className={expired ? 'bg-red-100 text-red-700' : 'hover:bg-gray-100'}>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('Date-fin')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('Date-initial')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('Montant par Mois')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('Motif-Saisi')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('Nom-beneficaire')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('Nom-employé')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('Relation-employe-beneficiaire')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('fonction-employé')}</td>
+                                    <td className="border border-gray-300 px-4 py-2 whitespace-nowrap">{get('total-à-payer')}</td>
+                                </tr>
+                            );
+                        })}
+                    </tbody>
+                </table>
+            </div>
             <div className="flex justify-center mt-4">
-                {Array.from({ length: totalPages }, (_, index) => (
+                {Array.from({ length: Math.ceil(filteredDocuments.length / documentsPerPage) }, (_, index) => (
                     <button
                         key={index}
                         onClick={() => paginate(index + 1)}
