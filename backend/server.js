@@ -30,6 +30,7 @@ app.use((req, res, next) => {
 // Helper function to fetch token
 async function getAuthToken() {
     try {
+        // Use credentials from .env file
         const response = await axios.post('http://localhost/api/v4/auth/token/obtain/', {
             username: process.env.MAYAN_USERNAME,
             password: process.env.MAYAN_PASSWORD,
@@ -48,6 +49,12 @@ async function getAuthToken() {
         }
         throw new Error('Failed to fetch auth token');
     }
+}
+
+// Helper function to fetch session cookies (sessionid, csrftoken)
+async function getSessionCookies() {
+    // No longer needed: we use the token as CSRF token
+    return null;
 }
 
 // Helper function to verify workflow template and state
@@ -105,39 +112,23 @@ app.post('/api/login', async (req, res) => {
 app.get('/api/documents', async (req, res) => {
     try {
         console.log('Fetching documents from Mayan API..');
-        console.log('Cookies received:', req.cookies); // Debugging log to check cookies
-
         const token = await getAuthToken();
         if (!token) {
             console.error('Error: Auth token is null or undefined');
             return res.status(500).json({ error: 'Failed to fetch auth token' });
         }
-
-        const csrfToken = req.cookies.csrftoken; // Retrieve CSRF token from cookies
-        const sessionId = req.cookies.sessionid; // Retrieve session ID from cookies
-
-        if (!csrfToken || !sessionId) {
-            console.error('Error: Missing CSRF token or session ID');
-            return res.status(400).json({ error: 'Missing CSRF token or session ID' });
-        }
-
         const apiUrl = 'http://localhost/api/v4/workflow_templates/1/states/3/documents/';
-        console.log('API URL:', apiUrl);
-
         const response = await axios.get(apiUrl, {
             headers: {
                 Authorization: `Bearer ${token}`,
-                'X-CSRFTOKEN': csrfToken,
-                Cookie: `sessionid=${sessionId}`,
+                'X-CSRFToken': token,
                 Accept: 'application/json',
             },
         });
-
         if (!response.data || !response.data.results) {
             console.error('Error: Invalid response from Mayan API');
             return res.status(500).json({ error: 'Invalid response from Mayan API' });
         }
-
         console.log('Documents fetched successfully:', response.data.results);
         res.json(response.data.results);
     } catch (error) {
@@ -158,34 +149,19 @@ app.get('/api/documents_with_metadata', async (req, res) => {
             console.error('Error: Auth token is null or undefined');
             return res.status(500).json({ error: 'Failed to fetch auth token' });
         }
-        console.log('Auth token:', token); // Debugging log
-        const csrfToken = req.cookies.csrftoken; // Retrieve CSRF token from cookies
-        const sessionId = req.cookies.sessionid; // Retrieve session ID from cookies
-
-        if (!csrfToken || !sessionId) {
-            console.error('Error: Missing CSRF token or session ID');
-            return res.status(400).json({ error: 'Missing CSRF token or session ID' });
-        }
-
         const apiUrl = 'http://localhost/api/v4/workflow_templates/1/states/3/documents/';
-        console.log('API URL:', apiUrl);
-
         const documentsResponse = await axios.get(apiUrl, {
             headers: {
                 Authorization: `Bearer ${token}`,
-                'X-CSRFTOKEN': csrfToken,
-                Cookie: `sessionid=${sessionId}`,
+                'X-CSRFToken': token,
                 Accept: 'application/json',
             },
         });
-
         if (!documentsResponse.data || !documentsResponse.data.results) {
             console.error('Error: Invalid response from Mayan API');
             return res.status(500).json({ error: 'Invalid response from Mayan API' });
         }
-
         const documents = documentsResponse.data.results;
-
         // Fetch metadata for each document
         const documentsWithMetadata = await Promise.all(
             documents.map(async (doc) => {
@@ -193,12 +169,10 @@ app.get('/api/documents_with_metadata', async (req, res) => {
                     const metadataResponse = await axios.get(`http://localhost/api/v4/documents/${doc.id}/metadata/`, {
                         headers: {
                             Authorization: `Bearer ${token}`,
-                            'X-CSRFTOKEN': csrfToken,
-                            Cookie: `sessionid=${sessionId}`,
+                            'X-CSRFToken': token,
                             Accept: 'application/json',
                         },
                     });
-
                     return {
                         ...doc,
                         metadata: metadataResponse.data.results || [],
@@ -212,7 +186,6 @@ app.get('/api/documents_with_metadata', async (req, res) => {
                 }
             })
         );
-
         console.log('Documents with metadata fetched successfully:', documentsWithMetadata);
         res.json(documentsWithMetadata);
     } catch (error) {
