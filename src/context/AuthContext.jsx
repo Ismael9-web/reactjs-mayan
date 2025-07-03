@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Cookies from 'js-cookie';
@@ -9,16 +10,11 @@ export const AuthProvider = ({ children }) => {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const navigate = useNavigate();
 
+  // Login: use /api/login to get token, sessionid, csrftoken (all set as cookies by backend)
   const login = async (username, password) => {
     try {
-      const response = await api.post('/auth/token/obtain/', { username, password });
-      const { access } = response.data;
-      const sessionIdHeader = response.headers['set-cookie'];
-
-      // Save token and sessionId in cookies
-      Cookies.set('authToken', access, { expires: 1 }); // Expires in 1 day
-      Cookies.set('sessionId', sessionIdHeader, { expires: 1 });
-
+      const response = await api.post('/login', { username, password });
+      // Cookies are set by backend (authToken, sessionid, csrftoken)
       setIsAuthenticated(true);
       navigate('/dashboard');
       return true;
@@ -28,29 +24,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = async () => {
-    try {
-      await api.post('/logout');
-    } catch (error) {
-      // Ignore errors, just ensure cookies are cleared
-      console.error('Logout API error:', error);
-    }
+  const logout = () => {
+    // Remove all auth cookies
     Cookies.remove('authToken');
-    Cookies.remove('sessionId');
+    Cookies.remove('sessionid');
+    Cookies.remove('csrftoken');
     setIsAuthenticated(false);
   };
 
-  const getAuthHeaders = () => {
-    const authToken = Cookies.get('authToken');
-    const sessionId = Cookies.get('sessionId');
+  // For requests, cookies are sent automatically by axios (withCredentials: true)
+  // If you need to manually get CSRF/session, use:
+  const getAuthCookies = () => {
     return {
-      Authorization: `Bearer ${authToken}`,
-      Cookie: sessionId,
+      authToken: Cookies.get('authToken'),
+      sessionid: Cookies.get('sessionid'),
+      csrftoken: Cookies.get('csrftoken'),
     };
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated, login, logout, getAuthHeaders }}>
+    <AuthContext.Provider value={{ isAuthenticated, login, logout, getAuthCookies }}>
       {children}
     </AuthContext.Provider>
   );

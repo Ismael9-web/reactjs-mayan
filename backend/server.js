@@ -74,25 +74,17 @@ async function verifyWorkflowTemplateAndState(token, templateId, stateId) {
 // Route to handle login requests
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
-
     try {
-        const response = await axios.post('http://localhost/api/v4/auth/token/obtain/', {
+        // Only get token, do not require CSRF/session for login
+        const tokenResponse = await axios.post('http://localhost/api/v4/auth/token/obtain/', {
             username,
             password,
-        }, {
-            headers: { 'Content-Type': 'application/json' },
-        });
+        }, { headers: { 'Content-Type': 'application/json' } });
+        const token = tokenResponse.data.token;
 
-        const token = response.data.token;
-
-        // Send token and optionally set a cookie
+        // Set token as cookie for client
         res
-            .cookie('authToken', token, {
-                httpOnly: false, // client-side access
-                secure: false,   // use true in production with HTTPS
-                sameSite: 'Lax',
-                maxAge: 24 * 60 * 60 * 1000, // 1 day
-            })
+            .cookie('authToken', token, { httpOnly: false, secure: false, sameSite: 'Lax', maxAge: 24 * 60 * 60 * 1000 })
             .json({ token });
 
     } catch (error) {
