@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import api from '../../services/api';
 import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import 'jspdf-autotable';
 
 const WorkflowDocuments = () => {
 
@@ -120,15 +120,8 @@ const WorkflowDocuments = () => {
 
     // --- PDF Export: all columns, all filtered data, dynamic header, and totals as in sample image ---
     const handleExportPDF = () => {
-        // Attach autoTable to jsPDF if not already
-        if (typeof jsPDF === 'function' && typeof jsPDF.prototype.autoTable !== 'function' && typeof autoTable === 'function') {
-            autoTable(jsPDF);
-        }
-        if (typeof jsPDF !== 'function' || typeof jsPDF.prototype.autoTable !== 'function') {
-            alert('jsPDF or autoTable is not loaded.');
-            return;
-        }
-        const docPdf = new jsPDF('p', 'pt', 'a4');
+        // jsPDF and autoTable are imported as ES modules, so just use them directly
+        const docPdf = new jsPDF({ unit: 'pt', format: 'a4', orientation: 'p' });
         // Title
         docPdf.setFontSize(14);
         docPdf.text('Direction de la Trésorerie Générale', 32, 32);
@@ -161,7 +154,6 @@ const WorkflowDocuments = () => {
 
         // Add table
         try {
-            // Use docPdf.autoTable instead of autoTable(docPdf, ...)
             docPdf.autoTable({
                 head,
                 body: rows,
