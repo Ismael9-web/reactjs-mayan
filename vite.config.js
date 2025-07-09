@@ -1,24 +1,20 @@
 // vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path';
 
+// ✅ Final working Vite config compatible with TailwindCSS and PostCSS
 export default defineConfig({
   plugins: [react()],
-  server: {
-    port: 3000,
-    fs: {
-      strict: false,
-      allow: ['..']
-    }
+  css: {
+    postcss: './postcss.config.js',
   },
   resolve: {
     alias: {
-      '@': '/src'
-    }
+      '@': path.resolve(__dirname, './src'),
+    },
   },
-  build: {
-    outDir: 'dist',
-    assetsDir: 'assets'
-  }
+  server: {
+    port: 3000, // ✅ ensures the dev server uses localhost:5173
+  },
 });
-
